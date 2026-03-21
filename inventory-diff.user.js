@@ -453,8 +453,8 @@ function wrapper(plugin_info) {
     var dlg = window.dialog({
       title: 'Inventory — ' + fmtDate(snapshot.timestamp),
       html: h,
-      width: 380,
-      maxHeight: window.innerHeight * 0.85,
+      width: window.innerWidth < 700 ? window.innerWidth : 380,
+      height: window.innerHeight - 10,
       id: 'inventory-detail-dialog-' + snapshot.timestamp
     });
 
@@ -474,8 +474,8 @@ function wrapper(plugin_info) {
     var dlg = window.dialog({
       title: 'Inventory Diff',
       html: buildDialogHtml(snapshots),
-      width: 560,
-      maxHeight: window.innerHeight * 0.85,
+      width: window.innerWidth < 700 ? window.innerWidth : 560,
+      height: window.innerHeight - 10,
       id: 'inventory-diff-dialog'
     });
 
