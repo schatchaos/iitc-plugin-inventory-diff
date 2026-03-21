@@ -2,7 +2,7 @@
 // @id              inventoryDiff
 // @name            IITC Plugin: Inventory Diff
 // @category        Info
-// @version         0.1.0
+// @version         0.1.1
 // @namespace       https://github.com/schatchaos/iitc-plugin-inventory-diff
 // @homepageURL     https://github.com/schatchaos/iitc-plugin-inventory-diff
 // @downloadURL     https://github.com/schatchaos/iitc-plugin-inventory-diff/raw/main/inventory-diff.user.js
@@ -454,6 +454,7 @@ function wrapper(plugin_info) {
       title: 'Inventory — ' + fmtDate(snapshot.timestamp),
       html: h,
       width: 380,
+      maxHeight: window.innerHeight * 0.85,
       id: 'inventory-detail-dialog-' + snapshot.timestamp
     });
 
@@ -474,6 +475,7 @@ function wrapper(plugin_info) {
       title: 'Inventory Diff',
       html: buildDialogHtml(snapshots),
       width: 560,
+      maxHeight: window.innerHeight * 0.85,
       id: 'inventory-diff-dialog'
     });
 
