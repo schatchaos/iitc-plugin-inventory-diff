@@ -7,7 +7,7 @@
 // @homepageURL     https://github.com/schatchaos/iitc-plugin-inventory-diff
 // @downloadURL     https://github.com/schatchaos/iitc-plugin-inventory-diff/raw/main/inventory-diff.user.js
 // @description     Capture inventory snapshots and compare diffs between them
-// @author          TODO
+// @author          Søren Schrøder
 // @include         https://intel.ingress.com/*
 // @match           https://intel.ingress.com/*
 // @grant           none
