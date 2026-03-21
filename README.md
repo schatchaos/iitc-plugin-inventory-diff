@@ -73,3 +73,9 @@ The plugin automatically sorts A and B by timestamp, so the direction is always 
 ## Acknowledgements
 
 Inventory parsing approach inspired by [iitc-inventory-parser](https://github.com/633KYN35D/iitc-inventory-parser) by 633KYN35D and EisFrei.
+
+## Screenshot
+
+Chrome desktop + Tampermonkey
+
+<img width="1057" height="554" alt="image" src="https://github.com/user-attachments/assets/aaf83fca-42b0-4127-a917-556604f1624d" />
