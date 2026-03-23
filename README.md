@@ -78,4 +78,4 @@ Inventory parsing approach inspired by [iitc-inventory-parser](https://github.co
 
 Chrome desktop + Tampermonkey
 
-<img width="1057" height="554" alt="image" src="https://github.com/user-attachments/assets/aaf83fca-42b0-4127-a917-556604f1624d" />
+<img width="953" height="890" alt="image" src="https://github.com/user-attachments/assets/986780bb-ad24-4cc6-9858-da834a75821f" />
