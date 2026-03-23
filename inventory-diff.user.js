@@ -240,7 +240,7 @@ function wrapper(plugin_info) {
     });
   }
 
-  self.syncWithServer = function (statusEl) {
+  self.syncWithServer = function (statusEl, onSuccess) {
     var settings = self.loadSyncSettings();
     if (!settings.serverUrl || !settings.secret) {
       statusEl.text('Enter server URL and secret first.');
@@ -271,6 +271,7 @@ function wrapper(plugin_info) {
           }
           localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
           statusEl.text('Synced — ' + merged.length + ' snapshots.');
+          if (onSuccess) onSuccess(merged);
         },
         error: function (xhr) {
           var msg = (xhr.responseJSON && xhr.responseJSON.error) ? xhr.responseJSON.error : 'request failed';
@@ -616,7 +617,10 @@ function wrapper(plugin_info) {
       var url    = dlg.find('#inv-diff-sync-url').val().trim();
       var secret = dlg.find('#inv-diff-sync-secret').val();
       self.saveSyncSettings({ serverUrl: url, secret: secret });
-      self.syncWithServer(dlg.find('#inv-diff-sync-status'));
+      self.syncWithServer(dlg.find('#inv-diff-sync-status'), function () {
+        dlg.dialog('close');
+        setTimeout(self.showDialog, 50);
+      });
     });
 
     // Compute and display diff
