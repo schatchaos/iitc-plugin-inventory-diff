@@ -1,0 +1,24 @@
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - ./localstorage/redis:/data
+
+  server:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "${INVDIFF_PORT:-3000}:${INVDIFF_PORT:-3000}"
+    environment:
+      INVDIFF_PORT:          ${INVDIFF_PORT:-3000}
+      INVDIFF_REDIS_URL:     redis://redis:6379
+      INVDIFF_CORS_ORIGIN:   ${INVDIFF_CORS_ORIGIN:-https://intel.ingress.com}
+      INVDIFF_MAX_SNAPSHOTS: ${INVDIFF_MAX_SNAPSHOTS:-100}
+      INVDIFF_TLS_CERT:      ${INVDIFF_TLS_CERT:-}
+      INVDIFF_TLS_KEY:       ${INVDIFF_TLS_KEY:-}
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    depends_on:
+      - redis
+
