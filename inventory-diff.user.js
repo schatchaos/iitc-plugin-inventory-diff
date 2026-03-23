@@ -2,10 +2,11 @@
 // @id              inventoryDiff
 // @name            IITC Plugin: Inventory Diff
 // @category        Info
-// @version         0.1.1
+// @version         0.1.2
 // @namespace       https://github.com/schatchaos/iitc-plugin-inventory-diff
 // @homepageURL     https://github.com/schatchaos/iitc-plugin-inventory-diff
 // @downloadURL     https://github.com/schatchaos/iitc-plugin-inventory-diff/raw/main/inventory-diff.user.js
+// @updateURL       https://github.com/schatchaos/iitc-plugin-inventory-diff/raw/main/inventory-diff.user.js
 // @description     Capture inventory snapshots and compare diffs between them
 // @author          Søren Schrøder
 // @include         https://intel.ingress.com/*
@@ -14,6 +15,7 @@
 // ==/UserScript==
 
 /* global $, window, IITC */
+/* eslint-disable no-multi-spaces, dot-notation */
 
 function wrapper(plugin_info) {
   if (typeof window.plugin !== 'function') window.plugin = function () {};
@@ -24,7 +26,9 @@ function wrapper(plugin_info) {
   plugin_info.pluginId = 'inventoryDiff';
 
   var STORAGE_KEY = 'plugin-inventory-diff-snapshots';
+  var SYNC_KEY      = 'plugin-inventory-diff-sync';
   var MAX_SNAPSHOTS = 50;
+  var TTL_MS        = 30 * 24 * 60 * 60 * 1000; // 30 days
 
   // ══════════════════════════════════════════════════════════
   // Phase 1: Parse inventory into a structured snapshot
@@ -167,10 +171,19 @@ function wrapper(plugin_info) {
   // Phase 2: Snapshot persistence in localStorage
   // ══════════════════════════════════════════════════════════
 
+  self._prunedCount = 0;
+
   self.loadSnapshots = function () {
     try {
       var raw = localStorage.getItem(STORAGE_KEY);
-      return raw ? JSON.parse(raw) : [];
+      var snapshots = raw ? JSON.parse(raw) : [];
+      var cutoff = Date.now() - TTL_MS;
+      var pruned = snapshots.filter(function (s) { return s.timestamp >= cutoff; });
+      self._prunedCount = snapshots.length - pruned.length;
+      if (self._prunedCount > 0) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(pruned));
+      }
+      return pruned;
     } catch (e) {
       console.warn('[inventory-diff] Failed to load snapshots:', e);
       return [];
@@ -194,10 +207,77 @@ function wrapper(plugin_info) {
   };
 
   self.deleteSnapshot = function (timestamp) {
-    var snapshots = self.loadSnapshots().filter(function (s) {
-      return s.timestamp !== timestamp;
+    var snapshots = self.loadSnapshots().map(function (s) {
+      if (s.timestamp === timestamp) s.deleted = true;
+      return s;
     });
     localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshots));
+  };
+
+  // ══════════════════════════════════════════════════════════
+  // Phase 4: Server sync
+  // ══════════════════════════════════════════════════════════
+
+  self.loadSyncSettings = function () {
+    try {
+      var raw = localStorage.getItem(SYNC_KEY);
+      return raw ? JSON.parse(raw) : { serverUrl: '', secret: '' };
+    } catch (e) {
+      return { serverUrl: '', secret: '' };
+    }
+  };
+
+  self.saveSyncSettings = function (settings) {
+    localStorage.setItem(SYNC_KEY, JSON.stringify(settings));
+  };
+
+  function sha256(str) {
+    var buf = new TextEncoder().encode(str);
+    return crypto.subtle.digest('SHA-256', buf).then(function (hashBuf) {
+      return Array.from(new Uint8Array(hashBuf))
+        .map(function (b) { return b.toString(16).padStart(2, '0'); })
+        .join('');
+    });
+  }
+
+  self.syncWithServer = function (statusEl) {
+    var settings = self.loadSyncSettings();
+    if (!settings.serverUrl || !settings.secret) {
+      statusEl.text('Enter server URL and secret first.');
+      return;
+    }
+
+    var nickname = (window.PLAYER && window.PLAYER.nickname) || '';
+    if (!nickname) {
+      statusEl.text('Cannot sync: player nickname not available.');
+      return;
+    }
+
+    statusEl.text('Syncing…');
+
+    sha256(nickname + settings.secret).then(function (key) {
+      var snapshots = self.loadSnapshots(); // includes deleted:true entries
+      var url = settings.serverUrl.replace(/\/$/, '') + '/snapshots/' + key;
+
+      $.ajax({
+        url: url,
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(snapshots),
+        success: function (merged) {
+          if (!Array.isArray(merged)) {
+            statusEl.text('Sync error: unexpected server response.');
+            return;
+          }
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+          statusEl.text('Synced — ' + merged.length + ' snapshots.');
+        },
+        error: function (xhr) {
+          var msg = (xhr.responseJSON && xhr.responseJSON.error) ? xhr.responseJSON.error : 'request failed';
+          statusEl.text('Sync error: ' + msg);
+        }
+      });
+    });
   };
 
   // ══════════════════════════════════════════════════════════
@@ -469,11 +549,14 @@ function wrapper(plugin_info) {
   // ── Diff dialog ────────────────────────────────────────────
 
   self.showDialog = function () {
-    var snapshots = self.loadSnapshots();
+    var snapshots = self.loadSnapshots().filter(function (s) { return !s.deleted; });
+    var pruneMsg = self._prunedCount > 0
+      ? self._prunedCount + ' snapshot' + (self._prunedCount > 1 ? 's' : '') + ' older than 30 days deleted.'
+      : '';
 
     var dlg = window.dialog({
       title: 'Inventory Diff',
-      html: buildDialogHtml(snapshots),
+      html: buildDialogHtml(snapshots, pruneMsg),
       width: window.innerWidth < 700 ? window.innerWidth : 560,
       height: window.innerHeight - 10,
       id: 'inventory-diff-dialog'
@@ -528,6 +611,14 @@ function wrapper(plugin_info) {
       setTimeout(self.showDialog, 50);
     });
 
+    // Sync button
+    dlg.find('#inv-diff-btn-sync').on('click', function () {
+      var url    = dlg.find('#inv-diff-sync-url').val().trim();
+      var secret = dlg.find('#inv-diff-sync-secret').val();
+      self.saveSyncSettings({ serverUrl: url, secret: secret });
+      self.syncWithServer(dlg.find('#inv-diff-sync-status'));
+    });
+
     // Compute and display diff
     dlg.find('#inv-diff-btn-diff').on('click', function () {
       var idxA = parseInt(dlg.find('input[name="inv-diff-a"]:checked').val(), 10);
@@ -552,8 +643,12 @@ function wrapper(plugin_info) {
     });
   };
 
-  function buildDialogHtml(snapshots) {
+  function buildDialogHtml(snapshots, pruneMsg) {
     var s = '<div style="font-size:12px;">';
+
+    if (pruneMsg) {
+      s += '<div style="margin-bottom:6px;color:#e67e22;font-size:11px;">' + pruneMsg + '</div>';
+    }
 
     // Controls row
     s += '<div style="margin-bottom:8px;">';
@@ -619,6 +714,21 @@ function wrapper(plugin_info) {
     }
 
     s += '<div id="inv-diff-output" style="margin-top:8px;"></div>';
+
+    // Sync section
+    var syncSettings = self.loadSyncSettings();
+    s += '<div style="margin-top:12px;border-top:1px solid #444;padding-top:8px;">';
+    s += '<div style="font-weight:bold;margin-bottom:6px;color:#aaa;font-size:11px;">SERVER SYNC</div>';
+    s += '<div style="margin-bottom:4px;">';
+    s += '<input id="inv-diff-sync-url" type="text" style="width:100%;box-sizing:border-box;background:#222;color:#eee;border:1px solid #555;padding:3px 5px;font-size:11px;" value="' + (syncSettings.serverUrl || '') + '" placeholder="Server URL (https://…)">';
+    s += '</div>';
+    s += '<div style="margin-bottom:6px;">';
+    s += '<input id="inv-diff-sync-secret" type="password" style="width:100%;box-sizing:border-box;background:#222;color:#eee;border:1px solid #555;padding:3px 5px;font-size:11px;" value="' + (syncSettings.secret || '') + '" placeholder="Secret">';
+    s += '</div>';
+    s += '<button id="inv-diff-btn-sync">Sync</button>';
+    s += ' <span id="inv-diff-sync-status" style="color:#888;font-size:11px;margin-left:8px;"></span>';
+    s += '</div>';
+
     s += '</div>';
     return s;
   }
